@@ -1,4 +1,4 @@
-# video-ads-suite
+# clinic-appointment-booking
 A mock hospital appointment booking serverless full stack application demonstrating the use of courier API.
 
 
@@ -12,49 +12,27 @@ A mock hospital appointment booking serverless full stack application demonstrat
     <img alt="Platform architecture diagram" src="images/high-level-architecture.png"/>
 </p>
 
-## Demo
-
-#### [Advertiser application](https://d1vx6hhgvjfh6e.cloudfront.net/)
-
-#### [Audience application](https://d1hi57m87oe7fq.cloudfront.net/)
-
 ## Backend
 
 Back-end services that makes up the Serverless Airline functionalities as of now:
 
 Service | Language | Description
 ------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------
-[Campaigns](./backend/campaigns/) | python | CRUD operations for creating ad campaigns.
-[Ads](./backend/ads/) | python | CRUD operations for creating video ads.
-[layers](./backend/shared/) | python | A layer is a file archive that contains libraries, a custom runtime, or other dependencies. With layers, you can use libraries in your function without needing to include them in a deployment package.
-[Analytics](./backend/analytics/) | python | Provides analytics for impressions, clicks etc.
-[Platform](./backend/platform/) | python | integrates different microservices with each other
-[Pipeline](./backend/pipeline/) | python | processes metrics from adserver and passes downstream (to platform) hourly.
-[Users](./backend/users/) | yml | handles authentication and manages user pools.
-[Ad Server](./backend/adServer/) | python | Provides a vast compliant interface for serving and tracking video ads
+[Appointments](./backend/appointments/) | python | CRUD operations for creating appointments.
 
 ## Frontend
 
-Frontend uses react-with typescript to build video-ad dashboard.
+Frontend uses react-with typescript.
 
 Service | Language | Description
 ------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------
-[Advertiser](./frontend/advertiser/) | React-Typescript | Dashboard to create and monitor ad campaigns
 [Audience](./frontend/audience/) | React-Typescript | Application to test ad campaigns for authenticated users.
 
 ## Project structure
 
     backend
-    ├── adServer
-    ├── ads
-    ├── analytics
-    ├── campaigns
-    ├── pipeline
-    ├── platform
-    ├── shared
-    └── users
+    ├── appointment
     frontend
-    ├── advertiser
     └── audience
     pipeline
 
@@ -63,7 +41,7 @@ Service | Language | Description
 * HTML, Material-ui, Typescript, ReactJS
 * Python
 * Jenkins
-* AWS (Lambda, dynamoDB, S3, mediaconvert, sns, sqs, kinesis-firehose, EC2, RDS-aurora-mysql, API gateway, Eventbridge, Athena, cloudformation, Cognito, CloudFront)
+* AWS (Lambda, dynamoDB, S3, API gateway, cloudformation, Cognito, CloudFront)
 
 ## Running the application
 
