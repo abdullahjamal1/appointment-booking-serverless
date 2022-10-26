@@ -36,6 +36,7 @@ cognito_client = boto3.client('cognito-idp')
 appointments_table = dynamodb.Table(os.environ["APPOINTMENTS_TABLE_NAME"])
 doctors_table = dynamodb.Table(os.environ["DOCTORS_TABLE_NAME"])
 
+tracer = Tracer()
 
 @tracer.capture_lambda_handler
 def lambda_handler(event, context):
@@ -45,16 +46,21 @@ def lambda_handler(event, context):
        #can atmost load 25 only, but just for mock purpose
        response = appointments_table.scan()
        for item in response['Items']:
+           
+            logger.info(str(dateutil.parser.isoparse(item['appointment']['date']).date()) + ' == ' + 
+                str(datetime.now().date()))
 
-        if dateutil.parser.isoparse(item['appointment']['date']).date() is datetime.now().date():
-
-            slot = item['appointment']['slot']
-
-            send_email(item['patient']['email'], item['patient']['name'], 
-                f'Clinic Appointment Reminder', f'Hi' + item['patient']['name'] + ', you have appointment with ' + item['doctor']['name'] + ' today at ' + slot + ' .')
-
-            send_email(item['doctor']['email'], item['doctor']['name'], 
-                'Appointment Reminder | slot ' + slot, f'Hi' + item['doctor']['name'] + ', you have appointment with ' + item['patient']['name'] + ' today at ' + slot + ' .')
+            if dateutil.parser.isoparse(item['appointment']['date']).date() == datetime.now().date():
+                
+                logger.info("matched")
+    
+                slot = item['appointment']['slot']
+    
+                send_email(item['patient']['email'], item['patient']['name'], 
+                    f'Clinic Appointment Reminder', f'Hi ' + item['patient']['name'] + ', you have appointment with ' + item['doctor']['name'] + ' today at ' + slot + ' .')
+    
+                send_email(item['doctor']['email'], item['doctor']['name'], 
+                    'Appointment Reminder | slot ' + slot, f'Hi ' + item['doctor']['name'] + ', you have appointment with ' + item['patient']['name'] + ' today at ' + slot + ' .')
 
     except ClientError as ex:
         
