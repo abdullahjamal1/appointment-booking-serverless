@@ -203,7 +203,7 @@ Resources:
       AppointmentJobSchedule:
         Type: Schedule
         Properties:
-          Schedule: "rate(1 hour)"
+          Schedule: "cron(30 8 * * ? *)"
           Name: AppointmentReminderJobSchedule
           Description: Appointment reminder schedule
           Enabled: true
