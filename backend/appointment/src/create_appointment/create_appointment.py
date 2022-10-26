@@ -114,7 +114,7 @@ def lambda_handler(event, context):
 
        doctor = response['Items'][0]
        body['doctorId'] = str(uuid.uuid4())
-       body['appointmentId'] = '{user_id}-{date}-{slot}'
+       body['appointmentId'] = f"{user_id}-{date}-{slot}"
        body['patient'] = {'name': user['name'], 'email': user['email']}
        body['doctor'] = {'name': doctor['name'], 'email': doctor['email']}
        body['booked_at'] = str(datetime.now())
@@ -123,10 +123,11 @@ def lambda_handler(event, context):
        #send email to patient
        speciality = doctor['speciality']
        send_email(body['patient']['email'], body['patient']['name'], 
-        '{speciality} Appointment confirmation', 'Hi your booking has been confirmed')
+        f'{speciality} Appointment confirmation', 'Hi ' + body['patient']['name'] + '!, your booking has been confirmed for ' + speciality + ' .'
+         + 'on ' + date + ' at slot ' + slot)
 
        send_email(body['doctor']['email'], body['doctor']['name'], 
-        'New Appointment | date {date} | slot {slot}', 'Hi you have received new appointment')
+        'New Appointment | date ' + date + ' | slot ' + slot, f'Hi' + body['doctor']['name'] + ', you have received new appointment')
 
     except ClientError as ex:
         

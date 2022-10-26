@@ -13,7 +13,7 @@ import { getCurrentSession } from "./services/session";
 import UserContext from "./contexts/UserContext";
 import { IUser } from "./interfaces/user";
 import { createTheme } from "@mui/material";
-import Home from "./components/Home";
+import Home from "./components/Appointment";
 
 Amplify.configure(awsconfig);
 

@@ -172,6 +172,43 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
+
+  AppointmentReminderFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    FunctionName: AppointmentReminderFunction
+    CodeUri: src/appointment_job/
+    Handler: appointment_job.lambda_handler
+    Environment:
+      Variables:
+        APPOINTMENTS_TABLE_NAME: !Ref AppointmentsTable
+        DOCTORS_TABLE_NAME: !Ref DoctorsTable
+        COURIER_API_AUTH_TOKEN: !Ref CourierApiToken
+    Layers:
+      - !Ref UtilsLayer
+      - !Ref ApiRequestsLayer
+      - !Ref CourierApiLayer
+    Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref AppointmentsTable
+      - DynamoDBReadPolicy:
+          TableName: !Ref DoctorsTable
+      - Version: "2012-10-17" # Policy Document
+        Statement:
+          - Effect: Allow
+            Action:
+              - cognito-idp:ListUsers
+            Resource: !Ref AudienceUserPoolArn
+    Events:
+      AppointmentJobSchedule:
+        Type: Schedule
+        Properties:
+          Schedule: "rate(1 hour)"
+          Name: AppointmentReminderJobSchedule
+          Description: Appointment reminder schedule
+          Enabled: true
+
+
   GetAppointmentFunction:
     Type: AWS::Serverless::Function
     Properties:

@@ -52,7 +52,7 @@ def lambda_handler(event, context):
 
     try:
         response = table.query(KeyConditionExpression = Key('doctorId').eq(doctor_id) 
-            and key('appointmentId').begins_with(user_id))
+            and Key('appointmentId').begins_with(user_id))
 
     except ClientError as ex:
         return res.status(400).send(ex.response['Error']['Message'])

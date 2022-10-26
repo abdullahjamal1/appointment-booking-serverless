@@ -54,8 +54,8 @@ function Auth() {
         }
       }}
       formFields={formFields}
-      // socialProviders={['google']} 
-      loginMechanisms={['email']}
+      socialProviders={['google']} 
+      loginMechanisms={['email', 'phone_number']}
       >
         {({ signOut, user }) => {
 
