@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  auth-resources
+  SAM Template for auth resources
+
+Globals:
+  Function:
+    Timeout: 3
+
+Resources:
+  ############################
+  ###  Audience Cognito User Pool ###
+  ###########################
+
+  AudienceCognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${AWS::StackName}-UserPool
+      AutoVerifiedAttributes:
+        - email
+      Schema:
+        - AttributeDataType: String
+          Name: gender
+        - AttributeDataType: String
+          Name: birthdate
+        - AttributeDataType: String
+          Name: name
+
+  AudienceUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: audience-app
+      GenerateSecret: false
+      UserPoolId: !Ref AudienceCognitoUserPool
+      ExplicitAuthFlows:
+        - ADMIN_NO_SRP_AUTH
+
+  AudienceUserPoolSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: /doctor-appointment/auth/audience/user-pool-id
+      Value: !Ref AudienceCognitoUserPool
+
+  AudienceUserPoolARNSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: /doctor-appointment/auth/audience/user-pool-arn
+      Value: !GetAtt AudienceCognitoUserPool.Arn
+
+  AudienceUserPoolAppClientSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: /doctor-appointment/auth/audience/user-pool-client-id
+      Value: !Ref AudienceUserPoolClient
+
+  ##############################
+  ###   Cognito Advertiser User Pool #####
+  #############################
+
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${AWS::StackName}-UserPool
+      AutoVerifiedAttributes:
+        - email
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: my-app
+      GenerateSecret: false
+      UserPoolId: !Ref CognitoUserPool
+      ExplicitAuthFlows:
+        - ADMIN_NO_SRP_AUTH
+
+  UserPoolSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: /doctor-appointment/auth/user-pool-id
+      Value: !Ref CognitoUserPool
+
+  UserPoolARNSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: /doctor-appointment/auth/user-pool-arn
+      Value: !GetAtt CognitoUserPool.Arn
+
+  UserPoolAppClientSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: /doctor-appointment/auth/user-pool-client-id
+      Value: !Ref UserPoolClient
+
+Outputs:
+  CognitoUserPoolId:
+    Description: "Cognito User Pool ID"
+    Value: !Ref CognitoUserPool
+
+  CognitoAppClientId:
+    Description: "Cognito App Client ID"
+    Value: !Ref UserPoolClient
+
+  UserPoolARNSSM:
+    Description: "UserPool ID"
+    Value: !Ref UserPoolARNSSM

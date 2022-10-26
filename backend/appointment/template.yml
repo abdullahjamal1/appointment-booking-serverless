@@ -1,0 +1,287 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: "AWS::Serverless-2016-10-31"
+
+Parameters:
+  AudienceUserPoolArn:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/doctor-appointment/auth/audience/user-pool-arn"
+  AudienceUserPoolId:
+    Type: "AWS::SSM::Parameter::Value<String>"
+    Default: "/doctor-appointment/auth/audience/user-pool-id"
+  Environment:
+    Type: String
+    Default: prod
+  AllowedOrigin:
+    Type: "String"
+  CourierApiToken:
+    Type: "String"
+  AudienceAppUrlSsm:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/doctor-appointment/audience/cloudfront/domain'
+
+# Globals:
+Conditions:
+  isProduction: !Equals [!Ref Environment, prod] 
+
+Globals:
+  Function:
+    Runtime: python3.9
+    Architectures:
+      - arm64 # arm64 performs better than default according to aws docs
+    Timeout: 30
+    Tracing: Active
+    Environment:
+      Variables:
+        USERPOOL_ID: !Ref AudienceUserPoolId
+        ALLOWED_ORIGIN: !Ref AllowedOrigin
+        POWERTOOLS_SERVICE_NAME: appointment
+        POWERTOOLS_METRICS_NAMESPACE: ${AWS::StackName}
+        # ALLOWED_ORIGIN: !Ref AllowedOrigin
+        ALLOWED_ORIGIN: !If [isProduction, !Sub "https://${AudienceAppUrlSsm}", !Ref AllowedOrigin]
+    Layers:
+      - !Sub arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPython:19
+
+  Api:
+    Cors:
+      AllowMethods: "'OPTIONS, GET, POST'"
+      AllowHeaders: "'Content-Type,Authorization'"
+      AllowCredentials: true
+      AllowOrigin: !If [isProduction, !Sub "'https://${AudienceAppUrlSsm}'", !Ref AllowedOrigin]
+      # AllowOrigin: "*"
+
+Resources:
+  #########
+  # TABLE #
+  #########
+
+  AppointmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AppointmentsTable
+      AttributeDefinitions:
+        - AttributeName: doctorId
+          AttributeType: S
+        - AttributeName: appointmentId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: doctorId
+          KeyType: HASH
+        - AttributeName: appointmentId
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  DoctorsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: DoctorsTable
+      AttributeDefinitions:
+        - AttributeName: doctorId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: doctorId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  #########
+  # API #
+  #########
+
+  AppointmentApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: appointmentApi
+      StageName: !Ref Environment
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref AudienceUserPoolArn
+            Identity: # OPTIONAL
+              Header: Authorization # OPTIONAL; Default: 'Authorization'
+
+  # ###########
+  # # Layers  #
+  # ###########
+
+  UtilsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: ../shared/apigateway
+      CompatibleRuntimes:
+        - python3.9
+    Metadata:
+      BuildMethod: python3.9
+
+  ApiRequestsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: ../shared/apiRequests
+      CompatibleRuntimes:
+        - python3.9
+    Metadata:
+      BuildMethod: python3.9
+
+  CourierApiLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: ../shared/courier
+      CompatibleRuntimes:
+        - python3.9
+    Metadata:
+      BuildMethod: python3.9
+
+  # ############
+  # # FUNCTION #
+  # ############
+
+  CreateAppointmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CreateAppointmentFunction
+      CodeUri: src/create_appointment/
+      Handler: create_appointment.lambda_handler
+      Environment:
+        Variables:
+          APPOINTMENTS_TABLE_NAME: !Ref AppointmentsTable
+          DOCTORS_TABLE_NAME: !Ref DoctorsTable
+          COURIER_API_AUTH_TOKEN: !Ref CourierApiToken
+      Layers:
+        - !Ref UtilsLayer
+        - !Ref ApiRequestsLayer
+        - !Ref CourierApiLayer
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AppointmentsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref DoctorsTable
+        - Version: "2012-10-17" # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+              Resource: !Ref AudienceUserPoolArn
+      Events:
+        GetRequest:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppointmentApi
+            Path: /appointments
+            Method: POST
+            RequestParameters:
+            - method.request.querystring.doctorId:
+                Required: true
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  GetAppointmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetAppointmentFunction
+      CodeUri: src/get_appointments/
+      Handler: get_appointments.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AppointmentsTable
+      Layers:
+        - !Ref UtilsLayer
+        - !Ref ApiRequestsLayer
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AppointmentsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref DoctorsTable
+        - Version: "2012-10-17" # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+              Resource: !Ref AudienceUserPoolArn
+      Events:
+        GetRequest:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppointmentApi
+            Path: /appointments
+            Method: GET
+            RequestParameters:
+            - method.request.querystring.doctorId:
+                Required: true
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  GetDoctorsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetDoctorsFunction
+      CodeUri: src/get_doctors/
+      Handler: get_doctors.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DoctorsTable
+      Layers:
+        - !Ref UtilsLayer
+        - !Ref ApiRequestsLayer
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref DoctorsTable
+        - Version: "2012-10-17" # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+              Resource: !Ref AudienceUserPoolArn
+      Events:
+        GetRequest:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppointmentApi
+            Path: /appointments/doctors
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  GetSlotsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetSlotsFunction
+      CodeUri: src/get_slots/
+      Handler: get_slots.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AppointmentsTable
+      Layers:
+        - !Ref UtilsLayer
+        - !Ref ApiRequestsLayer
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AppointmentsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref DoctorsTable
+        - Version: "2012-10-17" # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+              Resource: !Ref AudienceUserPoolArn
+      Events:
+        GetRequest:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppointmentApi
+            Path: /appointments/slots
+            Method: GET
+            RequestParameters:
+            - method.request.querystring.doctorId:
+                Required: true
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  ########################
+  ##  SSM parameters  ###
+  #######################
+
+  AppointmentApiUrl:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: /doctor-appointment/appointment/api/url
+      Value: !Sub "https://${AppointmentApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/appointments"
