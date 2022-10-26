@@ -1,0 +1,80 @@
+pipeline{
+
+    agent any
+
+    tools {nodejs "nodejs-17.9.0"}
+
+    options {
+        timeout(time: 20, unit: 'MINUTES') 
+    }
+
+    stages{
+        stage("install sam-cli"){
+            steps{
+                sh 'python3 -m venv venv && venv/bin/pip install aws-sam-cli'
+                stash includes: '**/venv/**/*', name: 'venv'
+            }
+        }
+        stage("build"){
+
+            steps{
+                echo "building video-ads"
+                sh 'make build-backend'
+            }
+        }
+        stage("testing"){
+            steps{
+                echo "testing video-ads"
+            }
+        }
+        stage("deploy"){
+            // when {
+            //     anyOf {
+            //         changeset "backend/**"
+            //         changeset "template.yml"
+            //         changeset "frontend/**"
+            //     }
+            // }
+            steps{
+                withAWS(credentials: 'videoads-jenkins-credentials', region: 'ap-south-1') {
+                    
+                    echo "deploying video-ads"
+                    
+                    unstash 'venv'
+                    sh 'venv/bin/sam deploy --no-confirm-changeset --stack-name video-ads --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM'
+                }
+            }
+        }
+        stage('Build & Publish Frontend'){
+            parallel {
+                stage('Audience App') {
+                    stages {
+                        stage('build') {
+                            steps {
+                                withAWS(credentials: 'videoads-jenkins-credentials', region: 'ap-south-1') {
+                                    echo "building audience app"
+                                    sh 'make build-audience-app'
+                                }
+                            }
+                        }
+                        stage('publish') {
+                            steps {
+                                withAWS(credentials: 'videoads-jenkins-credentials', region: 'ap-south-1') {
+                                    echo "publishing audience app"
+                                    sh 'make publish-audience-app'
+                                }
+                            }
+                        }
+                    }    
+                }
+            }
+        }
+    }
+    post{
+        success{
+            echo "video-ads deployed successfully"
+            echo "contents after success"
+            sh 'ls'
+        }
+    }
+}

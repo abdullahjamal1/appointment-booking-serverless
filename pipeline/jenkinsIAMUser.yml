@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  JenkinsUserPassword:
+    Type: String
+    Description: Password for IAM jenkins user
+    NoEcho: true
+
+Resources:
+  ###################
+  ##  AWS IAM user  #
+  ###################
+
+  JenkinsUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub "${AWS::Region}-videoads-jenkins-user"
+      LoginProfile:
+        Password: !Ref JenkinsUserPassword
+        PasswordResetRequired: false
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: CloudFormationTemplate
+                Effect: Allow
+                Action:
+                  - "cloudformation:CreateChangeSet"
+                Resource:
+                  - "arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31"
+              - Sid: CloudFormationStack
+                Effect: Allow
+                Action:
+                  - "cloudformation:*"
+                Resource:
+                  - !Sub "arn:aws:cloudformation:*:${AWS::AccountId}:stack/*"
+              - Sid: S3
+                Effect: Allow
+                Action:
+                  - "s3:*"
+                Resource: "*"
+              - Sid: Lambda
+                Effect: Allow
+                Action:
+                  - "lambda:*"
+                Resource: "*"
+                # - !Sub 'arn:aws:lambda:${AWS::Region}:*'
+              - Sid: IAM
+                Effect: Allow
+                Action:
+                  - "iam:*"
+                Resource: '*'
+              - Sid: APIGateway
+                Effect: Allow
+                Action:
+                  - "apigateway:*"
+                Resource:
+                  - "arn:aws:apigateway:*::*"
+              - Sid: SSMdescribeParameters
+                Effect: Allow
+                Action:
+                  - "ssm:DescribeParameters"
+                Resource: "*"
+              - Sid: SSM
+                Effect: Allow
+                Action:
+                  - "ssm:*"
+                Resource: "*"
+              - Sid: Cognito
+                Effect: Allow
+                Action:
+                  - "cognito-idp:*"
+                Resource:
+                  "*"
+                  #TODO: change to parameter/video-ads
+                  # - !Sub arn:aws:ssm:${AWS::Region}::parameter/*
+              - Sid: SNS
+                Effect: Allow
+                Action:
+                  - "SNS:*"
+                Resource:
+                  - !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:*"
+              - Sid: Cloudfront 
+                Effect: Allow
+                Action:
+                  - "cloudfront:*"
+                Resource: "*"
+              - Sid: EventBus
+                Effect: Allow
+                Action:
+                  - "events:*"
+                Resource: "*"
+              - Sid: Athena
+                Effect: Allow
+                Action:
+                  - "athena:*"
+                Resource: "*"
+              - Sid: DynamoDB 
+                Effect: Allow
+                Action:
+                - "dynamodb:*"
+                Resource: "*"
+              - Sid: sqs
+                Effect: Allow
+                Action:
+                - "sqs:*"
+                Resource: "*"
+              - Sid: Secrets 
+                Effect: Allow
+                Action:
+                - "secretsmanager:*"
+                Resource: "*"
+              - Sid: RDS 
+                Effect: Allow
+                Action:
+                - "rds:*"
+                Resource: "*"
+              - Sid: firehose
+                Effect: Allow
+                Action: 
+                - "firehose:*"
+                Resource: "*"
+          PolicyName: videoads-jenkins-cicd-policy
+
+  ###########
+  # secrets #
+  ###########
+
+  # Secrets Manager secret
+  DBSecret:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Name: !Sub "${AWS::Region}-videoads-jenkins-user-credentials"
+      Description: Credentials for jenkins user to depoy services
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${JenkinsUser}", "password": "${JenkinsUserPassword}"}'
+        GenerateStringKey: password
+        PasswordLength: 30
+        ExcludeCharacters: '"@/\'

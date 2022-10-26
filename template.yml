@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  SAM Template to demonstrate use case of courier API
+
+Parameters:
+  AllowedOrigin:
+    Type: "String"
+    Default: "localhost:3000"
+    Description: "Allowed origin"
+  CourierApiToken:
+    Type: "String"
+    Description: "Courier API token to send notifications"
+
+Resources:
+  Auth:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./backend/users/auth.yml
+
+  Appointment:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./backend/appointment/template.yml
+      Parameters:
+        AllowedOrigin: !Ref AllowedOrigin
+        CourierApiToken: !Ref CourierApiToken
+    DependsOn:
+      - Auth
+      - Patient
+
+  Patient:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./frontend/patient/template.yml

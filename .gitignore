@@ -1,0 +1,6 @@
+
+# Log file
+*.log
+*.toml
+.vscode
+*.DS_Store
