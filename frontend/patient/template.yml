@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  Creates the infrastructure to host and expose a Single Page Application:
+      - An Amazon S3 bucket for hosting the application
+      - An Amazon CloudFront distribution to expose the application
+      - An Amazon S3 bucket for hosting bucket and cloudfront access logs
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+
+Resources:
+  # The Amazon S3 bucket into which our Single Page Application build files must be deployed
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub "doctor-appointment-audience-app-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: s3-access-logs
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: "AES256"
+
+  # The Amazon S3 bucket policy for securing the bucket hosting the application
+  BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PolicyForCloudFrontPrivateContent
+            Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CFOriginAccessIdentity.S3CanonicalUserId
+            Action: "s3:GetObject*"
+            Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+      Bucket: !Ref S3Bucket
+
+  # The Amazon S3 bucket into which access logs from S3 (for the application) and CloudFront will be put
+  LoggingBucket:
+    #"This bucket is private and only for storing logs"
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub "doctor-appointment-audience-logs-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      AccessControl: LogDeliveryWrite
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: "AES256"
+    DeletionPolicy: Delete
+
+  # The Amazon CloudFront distribution exposing our Single Page Application
+  CFDistribution:
+    # "For demo purposes and to reduce cost, no web application firewall is configured"
+    Type: "AWS::CloudFront::Distribution"
+    DependsOn:
+      - CFOriginAccessIdentity
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: !GetAtt S3Bucket.RegionalDomainName
+            Id: myS3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CFOriginAccessIdentity}"
+        Enabled: "true"
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          ForwardedValues:
+            Cookies:
+              Forward: none
+            Headers: ["*"]
+            QueryString: True
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          TargetOriginId: myS3Origin
+          # see: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf # CORS-S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+        PriceClass: PriceClass_200 # includes india
+        Logging:
+          Bucket: !GetAtt LoggingBucket.RegionalDomainName
+          Prefix: "cloudfront-access-logs"
+
+  # The Amazon CloudFront origin access identity
+  CFOriginAccessIdentity:
+    Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
+    DependsOn:
+      - S3Bucket
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "access-identity-doctor-appointment-audience-${Environment}"
+
+  ###############
+  #   AWS SSM   #
+  ###############
+
+  CloudFrontAppDomainSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: /doctor-appointment/audience/cloudfront/domain
+      Value: !GetAtt CFDistribution.DomainName
+
+  AudienceAppBucketNameSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: /doctor-appointment/audience/s3/name
+      Value: !Ref S3Bucket
+
+Outputs:
+  BucketName:
+    Value: !Ref S3Bucket
